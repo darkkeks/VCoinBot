@@ -2,7 +2,7 @@ package kek.darkkeks.twitch;
 
 public class Strategy {
 
-    private static final int INCOME_THRESHOLD = 20000;
+    private static final int INCOME_THRESHOLD = 25000;
     private static final int TRANSFER_THRESHOLD = 500000;
 
     private int sinkUser;

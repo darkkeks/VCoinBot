@@ -10,7 +10,7 @@ import java.util.stream.Collectors;
 
 public class Main {
 
-    private static final int MY_ID = 159179937;
+    private static final int MY_ID = 456171173;
 
     public static void main(String[] args) {
         new Main().run();
@@ -21,7 +21,7 @@ public class Main {
 
         urls = urls.stream().map(Util::getWsUrl).collect(Collectors.toList());
 
-        Starter starter = new Starter(new Strategy(159179937));
+        Starter starter = new Starter(new Strategy(MY_ID));
 
         urls.forEach(starter::add);
 

@@ -7,7 +7,11 @@ def get_token(username, password):
         f"username={username}&password={password}"
 
     response = requests.get(url, allow_redirects=True)
-    return response.json()['access_token']
+    try:
+        return response.json()['access_token']
+    except:
+        print(response.json())
+    exit(0)
 
 
 def get_url(token):
@@ -21,3 +25,25 @@ def get_url(token):
 token = get_token(sys.argv[1], sys.argv[2])
 
 print(get_url(token))
+
+
+# accs = [
+
+# ]
+#
+# tokens = []
+# urls = []
+#
+# for account in accs:
+#     token = get_token(*account)
+#     print(token)
+#     tokens.append(token)
+#     url = get_url(token)
+#     urls.append(url)
+#     print(url)
+#
+# for token in tokens:
+#     print(token)
+#
+# for url in urls:
+#     print(url)

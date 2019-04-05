@@ -7,7 +7,6 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class VCoinClient {
-    private static int CLIENT_ID = 0;
 
     private static final Random random = new Random();
     private static final JsonParser parser = new JsonParser();
@@ -162,7 +161,7 @@ public class VCoinClient {
 
         executor.scheduleAtFixedRate(() -> {
             strategy.onTransferTick(this);
-        }, 2, 30, TimeUnit.SECONDS);
+        }, 1, 3 + (int)(3 * Math.random()), TimeUnit.MINUTES);
     }
 
     public void buyItem(Item item) {
