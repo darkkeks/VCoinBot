@@ -174,6 +174,7 @@ public class VCoinClient {
     }
 
     public void transfer(int user, long amount) {
+        score -= amount;
         sendPacket(id -> String.format("P%d T %d %d", id, user, amount)).thenAccept(response -> {
             JsonObject obj = parser.parse(response).getAsJsonObject();
             score = obj.get("score").getAsLong();
