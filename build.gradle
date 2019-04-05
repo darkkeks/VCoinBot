@@ -1,0 +1,23 @@
+plugins {
+    id 'com.github.johnrengelman.shadow' version '5.0.0'
+    id 'java'
+    id 'application'
+}
+
+group 'kek.darkkeks'
+version '1.0'
+
+mainClassName = 'kek.darkkeks.twitch.Main'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    maven { url "https://oss.jfrog.org/artifactory/libs-release"}
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.8.5'
+    compile "org.java-websocket:Java-WebSocket:1.4.0"
+    compile 'com.vk.api:sdk:0.5.12'
+}
