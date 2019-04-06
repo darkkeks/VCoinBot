@@ -17,8 +17,9 @@ public class Util {
         ScriptContext context = engine.getContext();
         StringWriter writer = new StringWriter();
         context.setWriter(writer);
+ 
 
-        js = js.replace("window", "{}");
+	js = "var window = {};window['location'] = { host: \"https://vk.com\"};window['parseInt']=parseInt;" + js;
 
         try {
             Object obj = engine.eval(js);
