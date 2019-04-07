@@ -64,7 +64,9 @@ public class Main {
                 try {
                     String account = accounts.take();
                     new VCoinClient(account, strategy, executor, () -> {
-                        accounts.add(account);
+                        executor.schedule(() -> {
+                            accounts.add(account);
+                        }, 2, TimeUnit.MINUTES);
                     });
                 } catch (InterruptedException e) {
                     System.out.println("Starter was interrupted, stopping");

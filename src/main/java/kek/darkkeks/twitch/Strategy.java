@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Strategy {
 
-    private static final int INCOME_THRESHOLD = 30000;
+    private static final int INCOME_THRESHOLD = 25000;
     private static final int SHARE_THRESHOLD = 15000;
     private static final int TRANSFER_PACKET = 500000000;
 
