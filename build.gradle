@@ -19,5 +19,5 @@ repositories {
 dependencies {
     implementation 'com.google.code.gson:gson:2.8.5'
     compile "org.java-websocket:Java-WebSocket:1.4.0"
-    compile 'com.vk.api:sdk:0.5.12'
+    compile 'de.vandermeer:asciitable:0.3.2'
 }

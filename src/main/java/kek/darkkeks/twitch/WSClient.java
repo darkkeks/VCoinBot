@@ -9,18 +9,15 @@ import java.net.URISyntaxException;
 public class WSClient extends WebSocketClient {
 
     private VCoinClient client;
-    private Runnable onClose;
 
-    public WSClient(String url, VCoinClient client, Runnable onClose) throws URISyntaxException {
+    public WSClient(String url, VCoinClient client) throws URISyntaxException {
         super(new URI(url));
         this.client = client;
-        this.onClose = onClose;
-        client.init(this);
     }
 
     @Override
     public void onOpen(ServerHandshake handshakedata) {
-        System.out.println("Connected");
+        System.out.println("Connected " + client.getId());
     }
 
     @Override
@@ -30,8 +27,8 @@ public class WSClient extends WebSocketClient {
 
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        System.out.println("Closed");
-        onClose.run();
+        System.out.println("Closed " + client.getId() + " " + reason + " " + code);
+        client.stop();
     }
 
     @Override

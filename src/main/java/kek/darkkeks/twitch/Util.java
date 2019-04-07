@@ -12,22 +12,24 @@ import java.util.regex.Pattern;
 
 public class Util {
 
-    public static int evaluateJS(String js) {
+    public static String evaluateJS(String js) {
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("javascript");
         ScriptContext context = engine.getContext();
         StringWriter writer = new StringWriter();
         context.setWriter(writer);
- 
 
-	js = "var window = {};window['location'] = { host: \"https://vk.com\"};window['parseInt']=parseInt;" + js;
+    	js = "var window = {};window['location'] = { host: \"https://vk.com\"};window['parseInt']=parseInt;" + js;
 
         try {
             Object obj = engine.eval(js);
             if(obj instanceof Double) {
-                return ((Double) obj).intValue();
+                return String.valueOf(((Double) obj).intValue());
             }
-        } catch (ScriptException ignored) { }
-        return -1;
+            return String.valueOf(obj);
+        } catch (ScriptException ignored) {
+            ignored.printStackTrace();
+        }
+        throw new IllegalStateException(js);
     }
 
     public static int extractUserId(String path) {
@@ -41,7 +43,7 @@ public class Util {
             URL url = new URL(path);
 
             int userid = extractUserId(path);
-            int channel = userid % 16;
+            int channel = userid % 32;
 
             return url.getProtocol().replace("http", "ws").replace("https", "wss") +
                     "://" +
@@ -58,7 +60,6 @@ public class Util {
     }
 
     private static int hashPassCoin(int userid) {
-        return (userid % 2 == 0 ? userid - 15 : userid - 109);
+        return userid - 1;
     }
-
 }

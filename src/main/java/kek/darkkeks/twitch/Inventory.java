@@ -3,7 +3,7 @@ package kek.darkkeks.twitch;
 import com.google.gson.JsonElement;
 
 import java.util.EnumMap;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Map;
 
 public class Inventory {
 
@@ -18,23 +18,27 @@ public class Inventory {
 
         obj.getAsJsonArray().forEach(name -> {
             Item item = Item.getItemByName(name.getAsString());
-            income += item.getIncome();
-            count.get(item).add();
+            if(item != null) {
+                income += item.getIncome();
+                count.get(item).add();
+            }
         });
     }
 
-    public ItemStack getBestItem(long score) {
-        AtomicReference<Double> bestRatio = new AtomicReference<>((double) 0);
-        AtomicReference<ItemStack> best = new AtomicReference<>();
-        count.forEach((item, stack) -> {
+    public ItemStack getBestItem() {
+        double bestRatio = 0;
+        ItemStack best = null;
+        for (Map.Entry<Item, ItemStack> entry : count.entrySet()) {
+            Item item = entry.getKey();
+            ItemStack stack = entry.getValue();
             double currentRatio = 1.0 * item.getIncome() / stack.getNextPrice();
 
-            if(stack.getNextPrice() <= score * 2 && currentRatio > bestRatio.get()) {
-                bestRatio.set(currentRatio);
-                best.set(stack);
+            if (currentRatio > bestRatio) {
+                bestRatio = currentRatio;
+                best = stack;
             }
-        });
-        return best.get();
+        }
+        return best;
     }
 
     public long getIncome() {

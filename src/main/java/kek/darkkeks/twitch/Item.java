@@ -10,7 +10,10 @@ public enum Item {
     COMPUTER(10000, 30),
     SERVER_VK(50000, 100),
     QUANTUM_PC(200000, 500),
-    DATACENTER(5000000, 1000);
+    DATACENTER(5000000, 1000),
+    BONUS(1000000000000000000L, 0),
+    VKP1(1000000000000000000L, 2000),
+    VKP2(1000000000000000000L, 10000);
 
     private static final Map<String, Item> itemByName = new HashMap<>();
 
@@ -21,10 +24,10 @@ public enum Item {
     }
 
     private String name;
-    private int price;
+    private long price;
     private int income;
 
-    Item(int price, int income) {
+    Item(long price, int income) {
         this.price = price;
         this.income = income;
         this.name = this.toString().toLowerCase();
@@ -34,7 +37,7 @@ public enum Item {
         return name;
     }
 
-    public int getPrice() {
+    public long getPrice() {
         return price;
     }
 

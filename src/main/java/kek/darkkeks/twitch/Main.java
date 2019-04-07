@@ -4,9 +4,7 @@ import java.io.*;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.stream.Collectors;
+import java.util.concurrent.*;
 
 public class Main {
 
@@ -17,15 +15,13 @@ public class Main {
     }
 
     private void run() {
-        List<String> urls = readUrls();
+        ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(4);
 
-        urls = urls.stream().map(Util::getWsUrl).collect(Collectors.toList());
+        Starter starter = new Starter(new Strategy(new ClientMonitor(), executor), executor);
 
-        Starter starter = new Starter(new Strategy(MY_ID));
+        readUrls().stream().map(Util::getWsUrl).forEach(starter::add);
 
-        urls.forEach(starter::add);
-
-        starter.start();
+        executor.submit(starter);
     }
 
     private List<String> readUrls() {
@@ -46,14 +42,16 @@ public class Main {
         return result;
     }
 
-    private class Starter extends Thread {
+    private class Starter implements Runnable {
 
+        private ScheduledExecutorService executor;
         private Strategy strategy;
         private BlockingDeque<String> accounts;
 
-        public Starter(Strategy strategy) {
+        public Starter(Strategy strategy, ScheduledExecutorService executor) {
             this.strategy = strategy;
             this.accounts = new LinkedBlockingDeque<>();
+            this.executor = executor;
         }
 
         public void add(String account) {
@@ -65,11 +63,9 @@ public class Main {
             while(true) {
                 try {
                     String account = accounts.take();
-                    int userId = Util.extractUserId(account);
-                    WSClient client = new WSClient(account, new VCoinClient(strategy, userId), () -> {
+                    new VCoinClient(account, strategy, executor, () -> {
                         accounts.add(account);
                     });
-                    client.connect();
                 } catch (InterruptedException e) {
                     System.out.println("Starter was interrupted, stopping");
                     break;

@@ -1,19 +1,28 @@
 package kek.darkkeks.twitch;
 
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 public class Strategy {
 
-    private static final int INCOME_THRESHOLD = 25000;
-    private static final int TRANSFER_THRESHOLD = 500000;
+    private static final int INCOME_THRESHOLD = 30000;
+    private static final int SHARE_THRESHOLD = 15000;
+    private static final int TRANSFER_PACKET = 500000000;
 
     private int sinkUser;
+    private ClientMonitor monitor;
+
     private VCoinClient biggestAccount;
 
-    public Strategy() {
-        this(-1);
+    public Strategy(ClientMonitor monitor, ScheduledExecutorService executor) {
+        this(-1, monitor, executor);
     }
 
-    public Strategy(int sinkUser) {
+    public Strategy(int sinkUser, ClientMonitor monitor, ScheduledExecutorService executor) {
         this.sinkUser = sinkUser;
+        this.monitor = monitor;
+
+        executor.scheduleAtFixedRate(monitor::print, 5, 5, TimeUnit.SECONDS);
     }
 
     private boolean hasBiggest() {
@@ -21,17 +30,28 @@ public class Strategy {
     }
 
     public void onStart(VCoinClient client) {
-        log(client, "Accepted by strategy");
+        monitor.update(client);
+    }
+
+    public void onStop(VCoinClient client) {
+        monitor.remove(client);
     }
 
     public void onStatusUpdate(VCoinClient client) {
-        long currentIncome = client.getInventory().getIncome();
-        log(client, String.format("Income -> %d, Score -> %d", currentIncome, client.getScore()));
-
+        monitor.update(client);
         share(client);
-
+        long currentIncome = client.getInventory().getIncome();
         if(currentIncome < INCOME_THRESHOLD) {
             buy(client);
+        }
+    }
+
+    private void buy(VCoinClient client) {
+        ItemStack item = client.getInventory().getBestItem();
+        if(item != null) {
+            if(client.getScore() >= item.getNextPrice()) {
+                client.buyItem(item.getItem());
+            }
         }
     }
 
@@ -41,26 +61,13 @@ public class Strategy {
         }
 
         if(hasBiggest() && client.getId() != sinkUser) {
-            if(client.getInventory().getIncome() < INCOME_THRESHOLD) {
-                long amount = biggestAccount.getScore() / 2;
-                if(amount >= TRANSFER_THRESHOLD) {
-                    biggestAccount.transfer(client.getId(), amount);
+            if(client.getInventory().getIncome() < SHARE_THRESHOLD) {
+                if(client.getScore() < TRANSFER_PACKET) {
+					if(biggestAccount.getScore() >= TRANSFER_PACKET) {
+                        biggestAccount.transfer(client.getId(), TRANSFER_PACKET);
+                    }
                 }
             }
-        }
-    }
-
-    private void buy(VCoinClient client) {
-        ItemStack item = client.getInventory().getBestItem(client.getScore());
-        if(item != null) {
-            if(client.getScore() >= item.getNextPrice()) {
-                client.buyItem(item.getItem());
-            } else {
-                log(client, String.format("Aiming for %s - %d/%d",
-                        item.getItem().getName(), client.getScore(), item.getNextPrice()));
-            }
-        } else {
-            log(client, "Everything is too expensive :(");
         }
     }
 
@@ -71,9 +78,5 @@ public class Strategy {
                 client.transfer(sinkUser, client.getScore());
             }
         }
-    }
-
-    private void log(VCoinClient client, String message) {
-        System.out.printf("[%d] %s%n", client.getId(), message);
     }
 }

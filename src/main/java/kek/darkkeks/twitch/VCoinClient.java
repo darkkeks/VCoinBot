@@ -3,8 +3,14 @@ package kek.darkkeks.twitch;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import java.util.*;
-import java.util.concurrent.*;
+import java.net.URISyntaxException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 public class VCoinClient {
 
@@ -17,14 +23,19 @@ public class VCoinClient {
     private static final String MISS = "MISS";
     private static final String TR = "TR";
     private static final String INIT = "INIT";
+    private static final String MSG = "MSG";
 
     private WSClient client;
     private ScheduledExecutorService executor;
     private int requestId;
     private Map<Integer, CompletableFuture<String>> requests;
+    private ScheduledFuture<?> updateTask;
+    private final Runnable onClose;
+    private boolean stopped;
 
     private int userId;
     private Strategy strategy;
+    private int missStreak;
 
     private Inventory inventory;
     private long score;
@@ -34,13 +45,15 @@ public class VCoinClient {
     private int ccp;
     private boolean firstTime;
 
-    private int missStreak;
-
-    public VCoinClient(Strategy strategy, int userId) {
-        this.userId = userId;
-        executor = new ScheduledThreadPoolExecutor(1);
-        requests = new HashMap<>();
+    public VCoinClient(String account, Strategy strategy, ScheduledExecutorService executor, Runnable onClose) throws URISyntaxException {
+        userId = Util.extractUserId(account);
         this.strategy = strategy;
+        this.executor = executor;
+        this.onClose = onClose;
+        requests = new HashMap<>();
+
+        client = new WSClient(account, this);
+        client.connect();
     }
 
     public int getId() {
@@ -59,10 +72,6 @@ public class VCoinClient {
         return inventory;
     }
 
-    public void init(WSClient client) {
-        this.client = client;
-    }
-
     public void process(String message) {
         switch (message.charAt(0)) {
             case '{': {
@@ -78,8 +87,8 @@ public class VCoinClient {
 
                     if(msg.has("pow")) {
                         String pow = msg.get("pow").getAsString();
-                        int result = Util.evaluateJS(pow);
-                        sendPacket(id -> String.format("C%d %d %d", id, randomId, result));
+                        String result = Util.evaluateJS(pow);
+                        sendPacket(id -> String.format("C%d %d %s", id, randomId, result));
                     }
 
                     startClient();
@@ -120,11 +129,13 @@ public class VCoinClient {
 
                     strategy.onStatusUpdate(this);
                 } else if(message.startsWith(BROKEN)) {
+                    System.out.println(getId() + " BROKEN");
                     stop();
                 } else if(message.startsWith(MISS)) {
                     message = message.replaceFirst(MISS + " ", "");
                     randomId = Integer.valueOf(message);
                     if(++missStreak >= 10) {
+                        System.out.println(getId() + " Critical MISS streak");
                         stop();
                     }
                 } else if(message.startsWith(TR)) {
@@ -132,9 +143,11 @@ public class VCoinClient {
                     String[] parts = message.split(" ");
                     long delta = Long.valueOf(parts[0]);
                     score += delta;
-                    String from = parts[1];
-                    System.err.printf("Transfer of %d coins from %s%n", delta, from);
                     strategy.onStatusUpdate(this);
+                } else if(message.startsWith(MSG)) {
+                    message = message.replaceFirst(MSG + " ", "");
+                    System.out.println(message);
+                    stop();
                 } else {
                     System.err.println("Unknown message: " + message);
                 }
@@ -142,26 +155,29 @@ public class VCoinClient {
         }
     }
 
-    private void stop() {
-        client.close();
-        executor.shutdownNow();
+    public boolean isActive() {
+        return !updateTask.isCancelled();
     }
 
-    public boolean isActive() {
-        return !executor.isShutdown();
+    public void stop() {
+        if(!stopped) {
+            stopped = true;
+            if(updateTask != null) {
+                updateTask.cancel(true);
+            }
+            client.close();
+            strategy.onStop(this);
+            onClose.run();
+        }
     }
 
     private void startClient() {
         strategy.onStart(this);
 
-        executor.scheduleAtFixedRate(() -> {
+        updateTask = executor.scheduleAtFixedRate(() -> {
             int cnt = Math.min(random.nextInt(30) + 1, ccp);
             sendPacket(id -> String.format("C%d %d %d", cnt, randomId, 1));
         }, 2000, 1200, TimeUnit.MILLISECONDS);
-
-        executor.scheduleAtFixedRate(() -> {
-            strategy.onTransferTick(this);
-        }, 1, 3 + (int)(3 * Math.random()), TimeUnit.MINUTES);
     }
 
     public void buyItem(Item item) {
