@@ -17,7 +17,7 @@ public class Main {
     private void run() {
         ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(4);
 
-        Starter starter = new Starter(new Strategy(new ClientMonitor(), executor), executor);
+        Starter starter = new Starter(new Strategy(MY_ID, new ClientMonitor(), executor), executor);
 
         readUrls().stream().map(Util::getWsUrl).forEach(starter::add);
 
@@ -66,7 +66,7 @@ public class Main {
                     new VCoinClient(account, strategy, executor, () -> {
                         executor.schedule(() -> {
                             accounts.add(account);
-                        }, 2, TimeUnit.MINUTES);
+                        }, 5, TimeUnit.MINUTES);
                     });
                 } catch (InterruptedException e) {
                     System.out.println("Starter was interrupted, stopping");

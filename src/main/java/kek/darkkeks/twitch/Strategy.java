@@ -1,13 +1,28 @@
 package kek.darkkeks.twitch;
 
+import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class Strategy {
 
     private static final int INCOME_THRESHOLD = 25000;
-    private static final int SHARE_THRESHOLD = 15000;
-    private static final int TRANSFER_PACKET = 500000000;
+
+    private static final int TRANSFER_THRESHOLD = 300 * 1000000;
+    private static final int TRANSFER_LEAVE = 50 * 1000000;
+
+    private static final int SHARE_PACKET = 500 * 1000000;
+
+    private static final Set<Integer> blacklist;
+
+    static {
+        blacklist = new HashSet<>();
+        blacklist.add(349519176);
+        blacklist.add(410103684);
+        blacklist.add(244896869);
+        blacklist.add(191281578);
+    }
 
     private int sinkUser;
     private ClientMonitor monitor;
@@ -44,6 +59,7 @@ public class Strategy {
         if(currentIncome < INCOME_THRESHOLD) {
             buy(client);
         }
+        onTransferTick(client);
     }
 
     private void buy(VCoinClient client) {
@@ -61,10 +77,10 @@ public class Strategy {
         }
 
         if(hasBiggest() && client.getId() != sinkUser) {
-            if(client.getInventory().getIncome() < SHARE_THRESHOLD) {
-                if(client.getScore() < TRANSFER_PACKET) {
-					if(biggestAccount.getScore() >= TRANSFER_PACKET) {
-                        biggestAccount.transfer(client.getId(), TRANSFER_PACKET);
+            if(client.getInventory().getIncome() < INCOME_THRESHOLD) {
+                if(client.getScore() < SHARE_PACKET) {
+                    if(biggestAccount.getScore() >= SHARE_PACKET) {
+                        biggestAccount.transfer(client.getId(), SHARE_PACKET);
                     }
                 }
             }
@@ -72,10 +88,14 @@ public class Strategy {
     }
 
     public void onTransferTick(VCoinClient client) {
+        if(blacklist.contains(client.getId())) return;
+
         long currentIncome = client.getInventory().getIncome();
         if(currentIncome >= INCOME_THRESHOLD) {
-            if(sinkUser != -1) {
-                client.transfer(sinkUser, client.getScore());
+            if(client.getId() != sinkUser && sinkUser != -1) {
+                if(client.getScore() >= TRANSFER_THRESHOLD) {
+                    client.transfer(sinkUser, client.getScore() - TRANSFER_LEAVE);
+                }
             }
         }
     }

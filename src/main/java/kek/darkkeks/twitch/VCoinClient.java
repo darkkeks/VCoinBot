@@ -109,7 +109,10 @@ public class VCoinClient {
                 message = message.substring(1);
                 String[] parts = message.split(" ");
                 int id = Integer.valueOf(parts[0]);
-                requests.get(id).complete(message.substring(message.indexOf(' ') + 1));
+                CompletableFuture<String> request = requests.get(id);
+                if(request != null) {
+                    request.complete(message.substring(message.indexOf(' ') + 1));
+                }
                 requests.remove(id);
                 break;
             }
