@@ -1,15 +1,15 @@
 package com.darkkeks.vcoin.bot;
 
 import java.io.*;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.*;
 
 public class Main {
 
-    private static final int PORT = 8080;
     private static final int MY_ID = 456171173;
     private static final String TOKEN_VARIABLE = "BOT_TOKEN";
 
@@ -18,21 +18,23 @@ public class Main {
     }
 
     private void run() {
-        ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(4);
-
         String token = Optional.ofNullable(System.getenv(TOKEN_VARIABLE)).orElseGet(() -> {
             System.out.println("WARNING: no token in env variables, using \"debug\"");
             return "debug";
         });
 
-        Controller controller = new Controller(MY_ID, executor);
-        Starter starter = new Starter(controller, executor);
-        WebServer server = new WebServer(PORT, token, controller);
+        Controller controller = new Controller(MY_ID);
+        WebServer server = new WebServer(token, controller);
+        WSFactory websocketFactory = new WSFactory(controller);
 
-        readUrls().stream().filter(url -> !url.startsWith("#")).map(Util::getWsUrl).forEach(starter::add);
-
-        executor.submit(starter);
         server.start();
+
+        readUrls().stream()
+                .filter(url -> !url.startsWith("#"))
+                .map(Util::getWsUrl)
+                .map(this::toUri)
+                .filter(Objects::nonNull)
+                .forEach(websocketFactory::connect);
     }
 
     private List<String> readUrls() {
@@ -53,39 +55,12 @@ public class Main {
         return result;
     }
 
-    private class Starter implements Runnable {
-
-        private ScheduledExecutorService executor;
-        private Controller controller;
-        private BlockingDeque<String> accounts;
-
-        public Starter(Controller controller, ScheduledExecutorService executor) {
-            this.controller = controller;
-            this.accounts = new LinkedBlockingDeque<>();
-            this.executor = executor;
-        }
-
-        public void add(String account) {
-            accounts.add(account);
-        }
-
-        @Override
-        public void run() {
-            while(true) {
-                try {
-                    String account = accounts.take();
-                    new VCoinClient(account, controller, executor, () -> {
-                        executor.schedule(() -> {
-                            accounts.add(account);
-                        }, 5, TimeUnit.MINUTES);
-                    });
-                } catch (InterruptedException e) {
-                    System.out.println("Starter was interrupted, stopping");
-                    break;
-                } catch (URISyntaxException e) {
-                    e.printStackTrace();
-                }
-            }
+    private URI toUri(String account) {
+        try {
+            return new URI(account);
+        } catch (URISyntaxException | NullPointerException e) {
+            e.printStackTrace();
+            return null;
         }
     }
 }

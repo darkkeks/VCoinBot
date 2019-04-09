@@ -3,18 +3,21 @@ package com.darkkeks.vcoin.bot;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 
-import java.net.URISyntaxException;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-public class VCoinClient {
+public class VCoinHandler extends ChannelInboundHandlerAdapter {
 
     private static final Random random = new Random();
     private static final JsonParser parser = new JsonParser();
@@ -27,16 +30,13 @@ public class VCoinClient {
     private static final String INIT = "INIT";
     private static final String MSG = "MSG";
 
-    private WSClient client;
-    private ScheduledExecutorService executor;
     private int requestId;
     private Map<Integer, CompletableFuture<String>> requests;
     private ScheduledFuture<?> updateTask;
-    private final Runnable onClose;
-    private boolean stopped;
+    private Channel channel;
 
-    private int userId;
     private Controller controller;
+    private int userId;
     private int missStreak;
 
     private Inventory inventory;
@@ -47,34 +47,27 @@ public class VCoinClient {
     private int ccp;
     private boolean firstTime;
 
-    public VCoinClient(String account, Controller controller, ScheduledExecutorService executor, Runnable onClose) throws URISyntaxException {
-        userId = Util.extractUserId(account);
+    public VCoinHandler(int userId, Controller controller) {
+        this.userId = userId;
         this.controller = controller;
-        this.executor = executor;
-        this.onClose = onClose;
         requests = new HashMap<>();
-
-        client = new WSClient(account, this);
-        client.connect();
     }
 
-    public int getId() {
-        return userId;
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) {
+        channel = ctx.channel();
     }
 
-    public int getPlace() {
-        return place;
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+        if(msg instanceof String) {
+            process((String) msg);
+        } else {
+            System.out.println("Invalid message: " + msg);
+        }
     }
 
-    public long getScore() {
-        return score;
-    }
-
-    public Inventory getInventory() {
-        return inventory;
-    }
-
-    public void process(String message) {
+    private void process(String message) {
         switch (message.charAt(0)) {
             case '{': {
                 JsonObject msg = parser.parse(message).getAsJsonObject();
@@ -90,7 +83,7 @@ public class VCoinClient {
                     if(msg.has("pow")) {
                         String pow = msg.get("pow").getAsString();
                         String result = Util.evaluateJS(pow);
-                        sendPacket(id -> String.format("C%d %d %s", id, randomId, result));
+                        sendPacket(Packets.captcha(randomId, result));
                     }
 
                     startClient();
@@ -120,7 +113,7 @@ public class VCoinClient {
             }
             default: {
                 if(message.startsWith(ALREADY_CONNECTED)) {
-                    stop();
+                    close();
                 } else if(message.startsWith(WAIT_FOR_LOAD)) {
                     // ignore
                 } else if(message.startsWith(SELF_DATA)) {
@@ -135,13 +128,13 @@ public class VCoinClient {
                     controller.onStatusUpdate(this);
                 } else if(message.startsWith(BROKEN)) {
                     System.out.println(getId() + " BROKEN");
-                    stop();
+                    close();
                 } else if(message.startsWith(MISS)) {
                     message = message.replaceFirst(MISS + " ", "");
                     randomId = Integer.valueOf(message);
                     if(++missStreak >= 10) {
                         System.out.println(getId() + " Critical MISS streak");
-                        stop();
+                        close();
                     }
                 } else if(message.startsWith(TR)) {
                     message = message.replaceFirst(TR + " ", "");
@@ -152,7 +145,7 @@ public class VCoinClient {
                 } else if(message.startsWith(MSG)) {
                     message = message.replaceFirst(MSG + " ", "");
                     System.out.println(message);
-                    stop();
+                    close();
                 } else {
                     System.err.println("Unknown message: " + message);
                 }
@@ -160,33 +153,28 @@ public class VCoinClient {
         }
     }
 
-    public boolean isActive() {
-        return !updateTask.isCancelled();
-    }
-
-    public void stop() {
-        if(!stopped) {
-            stopped = true;
-            if(updateTask != null) {
-                updateTask.cancel(true);
-            }
-            client.close();
+    private void close() {
+        if(channel.isOpen()) {
+            requests.forEach((id, future) -> {
+                future.completeExceptionally(new IOException("Connection closed"));
+            });
+            updateTask.cancel(true);
             controller.onStop(this);
-            onClose.run();
+            channel.close();
         }
     }
 
     private void startClient() {
         controller.onStart(this);
 
-        updateTask = executor.scheduleAtFixedRate(() -> {
+        updateTask = controller.getExecutor().scheduleAtFixedRate(() -> {
             int cnt = Math.min(random.nextInt(30) + 1, ccp);
             sendPacket(Packets.click(cnt, randomId));
         }, 2000, 1200, TimeUnit.MILLISECONDS);
     }
 
     public void buyItem(Item item) {
-        sendPacket(Packets.buy(item)).thenAccept(response -> {
+        sendRequest(Packets.buy(item)).thenAccept(response -> {
             JsonObject obj = parser.parse(response).getAsJsonObject();
             score = obj.get("score").getAsLong();
             inventory = new Inventory(obj.get("items"));
@@ -195,7 +183,7 @@ public class VCoinClient {
 
     public void transfer(int user, long amount) {
         score -= amount;
-        sendPacket(Packets.transfer(user, amount)).thenAccept(response -> {
+        sendRequest(Packets.transfer(user, amount)).thenAccept(response -> {
             JsonObject obj = parser.parse(response).getAsJsonObject();
             score = obj.get("score").getAsLong();
         });
@@ -203,7 +191,7 @@ public class VCoinClient {
 
     public Optional<String> transferBlocking(int user, long amount) {
         score -= amount;
-        String response = sendPacket(Packets.transfer(user, amount)).join();
+        String response = sendRequest(Packets.transfer(user, amount)).join();
 
         try {
             JsonObject obj = parser.parse(response).getAsJsonObject();
@@ -214,12 +202,33 @@ public class VCoinClient {
         }
     }
 
-    private CompletableFuture<String> sendPacket(Packet packet) {
-        CompletableFuture<String> result = new CompletableFuture<>();
+    private void sendPacket(Packet packet) {
+        ++requestId;
         String msg = packet.serialize(requestId);
-        client.send(msg);
+        channel.writeAndFlush(msg).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+    }
+
+    private CompletableFuture<String> sendRequest(Packet packet) {
+        sendPacket(packet);
+        CompletableFuture<String> result = new CompletableFuture<>();
         requests.put(requestId, result);
-        requestId++;
         return result;
+    }
+
+
+    public int getId() {
+        return userId;
+    }
+
+    public int getPlace() {
+        return place;
+    }
+
+    public long getScore() {
+        return score;
+    }
+
+    public Inventory getInventory() {
+        return inventory;
     }
 }

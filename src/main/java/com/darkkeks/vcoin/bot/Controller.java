@@ -3,6 +3,7 @@ package com.darkkeks.vcoin.bot;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public class Controller {
@@ -26,21 +27,27 @@ public class Controller {
     private int sinkUser;
     private AccountStorage storage;
     private ClientMonitor monitor;
+    private ScheduledExecutorService executor;
 
-    private VCoinClient biggestAccount;
+    private VCoinHandler biggestAccount;
 
-    public Controller(ScheduledExecutorService executor) {
-        this(NO_USER, executor);
+    public Controller() {
+        this(NO_USER);
     }
 
-    public Controller(int sinkUser, ScheduledExecutorService executor) {
+    public Controller(int sinkUser) {
         this.sinkUser = sinkUser;
         this.storage = new AccountStorage();
         this.monitor = new ClientMonitor();
+        this.executor = new ScheduledThreadPoolExecutor(8);
 
         executor.scheduleAtFixedRate(() -> {
             monitor.print(storage);
-        }, 5, 5, TimeUnit.SECONDS);
+        }, 10, 5, TimeUnit.SECONDS);
+    }
+
+    public ScheduledExecutorService getExecutor() {
+        return executor;
     }
 
     public AccountStorage getStorage() {
@@ -48,22 +55,25 @@ public class Controller {
     }
 
     public boolean hasBiggest() {
-        return biggestAccount != null && biggestAccount.isActive();
+        return biggestAccount != null;
     }
 
-    public VCoinClient getBiggestAccount() {
+    public VCoinHandler getBiggestAccount() {
         return biggestAccount;
     }
 
-    public void onStart(VCoinClient client) {
+    public void onStart(VCoinHandler client) {
         storage.update(client);
     }
 
-    public void onStop(VCoinClient client) {
+    public void onStop(VCoinHandler client) {
         storage.remove(client);
+        if(biggestAccount == client) {
+            biggestAccount = null;
+        }
     }
 
-    public void onStatusUpdate(VCoinClient client) {
+    public void onStatusUpdate(VCoinHandler client) {
         storage.update(client);
         share(client);
         long currentIncome = client.getInventory().getIncome();
@@ -73,7 +83,7 @@ public class Controller {
         onTransferTick(client);
     }
 
-    private void buy(VCoinClient client) {
+    private void buy(VCoinHandler client) {
         ItemStack item = client.getInventory().getBestItem();
         if(item != null) {
             if(client.getScore() >= item.getNextPrice()) {
@@ -82,7 +92,7 @@ public class Controller {
         }
     }
 
-    private void share(VCoinClient client) {
+    private void share(VCoinHandler client) {
         if(client.getId() == sinkUser) {
             biggestAccount = client;
         }
@@ -98,7 +108,7 @@ public class Controller {
         }
     }
 
-    private void onTransferTick(VCoinClient client) {
+    private void onTransferTick(VCoinHandler client) {
         if(blacklist.contains(client.getId())) return;
 
         long currentIncome = client.getInventory().getIncome();

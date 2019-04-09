@@ -10,15 +10,15 @@ import java.util.*;
 
 public class WebServer {
 
-    private int port;
+    private static final int PORT = 8080;
+
     private Gson gson;
     private String token;
     private Undertow server;
 
     private Controller controller;
 
-    public WebServer(int port, String token, Controller controller) {
-        this.port = port;
+    public WebServer(String token, Controller controller) {
         this.token = token;
         this.gson = new Gson();
         this.controller = controller;
@@ -26,7 +26,7 @@ public class WebServer {
 
     public void start() {
         server = Undertow.builder()
-                .addHttpListener(port, "0.0.0.0")
+                .addHttpListener(PORT, "0.0.0.0")
                 .setIoThreads(1)
                 .setWorkerThreads(1)
                 .setHandler(Handlers.path()
@@ -48,18 +48,13 @@ public class WebServer {
                 .add(HttpString.tryFromString("Content-Type"), "application/json")
                 .add(HttpString.tryFromString("Access-Control-Allow-Origin"), "*");
 
-        System.out.println(exchange.getQueryParameters());
-        System.out.println(queryParam(exchange, "to"));
-        System.out.println(queryParam(exchange, "amount"));
         Optional<Integer> to = queryParam(exchange, "to").map(Integer::parseInt);
         Optional<Long> amount = queryParam(exchange, "amount").map(Long::parseLong);
-        System.out.println(to);
-        System.out.println(amount);
 
         TransferStatus result;
         if (to.isPresent() && amount.isPresent()) {
             if (controller.hasBiggest()) {
-                VCoinClient client = controller.getBiggestAccount();
+                VCoinHandler client = controller.getBiggestAccount();
                 Optional<String> response = client.transferBlocking(to.get(), amount.get());
                 result = response.map(TransferStatus::new).orElseGet(TransferStatus::new);
             } else {
@@ -84,6 +79,7 @@ public class WebServer {
 
         public TransferStatus() {
             this.success = true;
+            this.message = null;
         }
 
         public TransferStatus(String message) {

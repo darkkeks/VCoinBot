@@ -13,4 +13,8 @@ public class Packets {
     public static Packet transfer(int user, long amount) {
         return id -> String.format("P%d T %d %d", id, user, amount);
     }
+
+    public static Packet captcha(int randomId, String result) {
+        return id -> String.format("C%d %d %s", id, randomId, result);
+    }
 }

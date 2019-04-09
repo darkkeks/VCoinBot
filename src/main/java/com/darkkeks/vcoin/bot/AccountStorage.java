@@ -5,17 +5,17 @@ import java.util.TreeMap;
 
 public class AccountStorage {
 
-    private Map<Integer, VCoinClient> clients;
+    private Map<Integer, VCoinHandler> clients;
 
     public AccountStorage() {
         clients = new TreeMap<>();
     }
 
-    public void update(VCoinClient client) {
+    public synchronized void update(VCoinHandler client) {
         clients.put(client.getId(), client);
     }
 
-    public void remove(VCoinClient client) {
+    public synchronized void remove(VCoinHandler client) {
         clients.remove(client.getId());
     }
 
@@ -23,7 +23,7 @@ public class AccountStorage {
         return clients.size();
     }
 
-    public Map<Integer, VCoinClient> getClients() {
+    public synchronized Map<Integer, VCoinHandler> getClients() {
         return clients;
     }
 }
