@@ -1,4 +1,4 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
@@ -26,15 +26,18 @@ public class Util {
                 return String.valueOf(((Double) obj).intValue());
             }
             return String.valueOf(obj);
-        } catch (ScriptException ignored) {
-            ignored.printStackTrace();
+        } catch (ScriptException e) {
+            e.printStackTrace();
         }
         throw new IllegalStateException(js);
     }
 
     public static int extractUserId(String path) {
         Matcher matcher = Pattern.compile("vk_user_id=(\\d+)").matcher(path);
-        matcher.find();
+        boolean found = matcher.find();
+        if(!found) {
+            throw new IllegalArgumentException("path");
+        }
         return Integer.valueOf(matcher.group(1));
     }
 

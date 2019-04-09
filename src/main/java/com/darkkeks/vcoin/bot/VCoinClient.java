@@ -1,11 +1,13 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 
 import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -34,7 +36,7 @@ public class VCoinClient {
     private boolean stopped;
 
     private int userId;
-    private Strategy strategy;
+    private Controller controller;
     private int missStreak;
 
     private Inventory inventory;
@@ -45,9 +47,9 @@ public class VCoinClient {
     private int ccp;
     private boolean firstTime;
 
-    public VCoinClient(String account, Strategy strategy, ScheduledExecutorService executor, Runnable onClose) throws URISyntaxException {
+    public VCoinClient(String account, Controller controller, ScheduledExecutorService executor, Runnable onClose) throws URISyntaxException {
         userId = Util.extractUserId(account);
-        this.strategy = strategy;
+        this.controller = controller;
         this.executor = executor;
         this.onClose = onClose;
         requests = new HashMap<>();
@@ -130,7 +132,7 @@ public class VCoinClient {
                     score = Long.valueOf(parts[1]);
                     randomId = Integer.valueOf(parts[2]);
 
-                    strategy.onStatusUpdate(this);
+                    controller.onStatusUpdate(this);
                 } else if(message.startsWith(BROKEN)) {
                     System.out.println(getId() + " BROKEN");
                     stop();
@@ -146,7 +148,7 @@ public class VCoinClient {
                     String[] parts = message.split(" ");
                     long delta = Long.valueOf(parts[0]);
                     score += delta;
-                    strategy.onStatusUpdate(this);
+                    controller.onStatusUpdate(this);
                 } else if(message.startsWith(MSG)) {
                     message = message.replaceFirst(MSG + " ", "");
                     System.out.println(message);
@@ -169,22 +171,22 @@ public class VCoinClient {
                 updateTask.cancel(true);
             }
             client.close();
-            strategy.onStop(this);
+            controller.onStop(this);
             onClose.run();
         }
     }
 
     private void startClient() {
-        strategy.onStart(this);
+        controller.onStart(this);
 
         updateTask = executor.scheduleAtFixedRate(() -> {
             int cnt = Math.min(random.nextInt(30) + 1, ccp);
-            sendPacket(id -> String.format("C%d %d %d", cnt, randomId, 1));
+            sendPacket(Packets.click(cnt, randomId));
         }, 2000, 1200, TimeUnit.MILLISECONDS);
     }
 
     public void buyItem(Item item) {
-        sendPacket(id -> String.format("P%d B %s", id, item.getName())).thenAccept(response -> {
+        sendPacket(Packets.buy(item)).thenAccept(response -> {
             JsonObject obj = parser.parse(response).getAsJsonObject();
             score = obj.get("score").getAsLong();
             inventory = new Inventory(obj.get("items"));
@@ -193,10 +195,23 @@ public class VCoinClient {
 
     public void transfer(int user, long amount) {
         score -= amount;
-        sendPacket(id -> String.format("P%d T %d %d", id, user, amount)).thenAccept(response -> {
+        sendPacket(Packets.transfer(user, amount)).thenAccept(response -> {
             JsonObject obj = parser.parse(response).getAsJsonObject();
             score = obj.get("score").getAsLong();
         });
+    }
+
+    public Optional<String> transferBlocking(int user, long amount) {
+        score -= amount;
+        String response = sendPacket(Packets.transfer(user, amount)).join();
+
+        try {
+            JsonObject obj = parser.parse(response).getAsJsonObject();
+            score = obj.get("score").getAsLong();
+            return Optional.empty();
+        } catch (JsonParseException ex) {
+            return Optional.of(response);
+        }
     }
 
     private CompletableFuture<String> sendPacket(Packet packet) {

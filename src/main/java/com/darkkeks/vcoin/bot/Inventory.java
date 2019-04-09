@@ -1,4 +1,4 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import com.google.gson.JsonElement;
 

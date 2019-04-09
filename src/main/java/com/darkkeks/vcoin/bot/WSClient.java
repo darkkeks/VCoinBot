@@ -1,4 +1,4 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;

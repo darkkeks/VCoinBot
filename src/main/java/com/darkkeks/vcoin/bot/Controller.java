@@ -1,18 +1,17 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import java.util.Set;
 import java.util.HashSet;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class Strategy {
+public class Controller {
 
-    private static final int INCOME_THRESHOLD = 25000;
-
-    private static final int TRANSFER_THRESHOLD = 300 * 1000000;
-    private static final int TRANSFER_LEAVE = 50 * 1000000;
-
-    private static final int SHARE_PACKET = 500 * 1000000;
+    private static final int NO_USER = -1;
+    private static final int INCOME_THRESHOLD = 25_000;
+    private static final int TRANSFER_THRESHOLD = 300_000_000;
+    private static final int TRANSFER_LEAVE = 50_000_000;
+    private static final int SHARE_PACKET = 500_000_000;
 
     private static final Set<Integer> blacklist;
 
@@ -25,35 +24,47 @@ public class Strategy {
     }
 
     private int sinkUser;
+    private AccountStorage storage;
     private ClientMonitor monitor;
 
     private VCoinClient biggestAccount;
 
-    public Strategy(ClientMonitor monitor, ScheduledExecutorService executor) {
-        this(-1, monitor, executor);
+    public Controller(ScheduledExecutorService executor) {
+        this(NO_USER, executor);
     }
 
-    public Strategy(int sinkUser, ClientMonitor monitor, ScheduledExecutorService executor) {
+    public Controller(int sinkUser, ScheduledExecutorService executor) {
         this.sinkUser = sinkUser;
-        this.monitor = monitor;
+        this.storage = new AccountStorage();
+        this.monitor = new ClientMonitor();
 
-        executor.scheduleAtFixedRate(monitor::print, 5, 5, TimeUnit.SECONDS);
+        executor.scheduleAtFixedRate(() -> {
+            monitor.print(storage);
+        }, 5, 5, TimeUnit.SECONDS);
     }
 
-    private boolean hasBiggest() {
+    public AccountStorage getStorage() {
+        return storage;
+    }
+
+    public boolean hasBiggest() {
         return biggestAccount != null && biggestAccount.isActive();
     }
 
+    public VCoinClient getBiggestAccount() {
+        return biggestAccount;
+    }
+
     public void onStart(VCoinClient client) {
-        monitor.update(client);
+        storage.update(client);
     }
 
     public void onStop(VCoinClient client) {
-        monitor.remove(client);
+        storage.remove(client);
     }
 
     public void onStatusUpdate(VCoinClient client) {
-        monitor.update(client);
+        storage.update(client);
         share(client);
         long currentIncome = client.getInventory().getIncome();
         if(currentIncome < INCOME_THRESHOLD) {
@@ -87,12 +98,12 @@ public class Strategy {
         }
     }
 
-    public void onTransferTick(VCoinClient client) {
+    private void onTransferTick(VCoinClient client) {
         if(blacklist.contains(client.getId())) return;
 
         long currentIncome = client.getInventory().getIncome();
         if(currentIncome >= INCOME_THRESHOLD) {
-            if(client.getId() != sinkUser && sinkUser != -1) {
+            if(client.getId() != sinkUser && sinkUser != NO_USER) {
                 if(client.getScore() >= TRANSFER_THRESHOLD) {
                     client.transfer(sinkUser, client.getScore() - TRANSFER_LEAVE);
                 }

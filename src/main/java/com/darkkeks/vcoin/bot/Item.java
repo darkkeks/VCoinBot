@@ -1,4 +1,4 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import java.util.HashMap;
 import java.util.Map;

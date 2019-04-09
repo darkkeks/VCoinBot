@@ -1,5 +1,6 @@
-urls.txt
+urls*.txt
 
+.env
 modules
 build
 .gradle

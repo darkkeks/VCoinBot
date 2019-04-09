@@ -1,4 +1,4 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 public class ItemStack {
     private Item item;

@@ -1,32 +1,16 @@
-package kek.darkkeks.twitch;
+package com.darkkeks.vcoin.bot;
 
 import de.vandermeer.asciitable.AsciiTable;
 import de.vandermeer.asciitable.CWC_FixedWidth;
 
-import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class ClientMonitor {
 
-    private Map<Integer, VCoinClient> clients;
-
     private long lastScore;
     private long lastIncome;
 
-    public ClientMonitor() {
-        this.clients = new TreeMap<>();
-    }
-
-    public void update(VCoinClient client) {
-        clients.put(client.getId(), client);
-    }
-
-    public void remove(VCoinClient client) {
-        clients.remove(client.getId());
-    }
-
-    public void print() {
+    public void print(AccountStorage storage) {
         AsciiTable table = new AsciiTable();
 
         table.getRenderer().setCWC(new CWC_FixedWidth()
@@ -42,7 +26,7 @@ public class ClientMonitor {
         AtomicLong incomeSum = new AtomicLong();
         AtomicLong scoreSum = new AtomicLong();
 
-        clients.forEach((id, client) -> {
+        storage.getClients().forEach((id, client) -> {
             table.addRow(
                     id,
                     formatValue(client.getInventory().getIncome()),
@@ -62,7 +46,7 @@ public class ClientMonitor {
                 "");
         table.addRule();
         table.addRow("Active",
-                clients.size(),
+                storage.size(),
                 "",
                 "");
 

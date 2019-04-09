@@ -1,5 +1,5 @@
 import requests
-import sys
+import time
 
 
 def get_token(username, password):
@@ -11,7 +11,7 @@ def get_token(username, password):
         return response.json()['access_token']
     except:
         print(response.json())
-    exit(0)
+        return None
 
 
 def get_url(token):
@@ -19,31 +19,29 @@ def get_url(token):
         f"access_token={token}&v=5.55&screen_name=app6915965_-137565779&owner_id=-137565779&func_v=3"
 
     response = requests.get(url, allow_redirects=True)
-    return response.json()['response']['embedded_uri']['view_url']
+    try:
+        return response.json()['response']['embedded_uri']['view_url']
+    except:
+        print(response.json())
+        return None
 
 
-token = get_token(sys.argv[1], sys.argv[2])
-
-print(get_url(token))
-
-
-# accs = [
-
-# ]
+# token = get_token(sys.argv[1], sys.argv[2])
 #
-# tokens = []
-# urls = []
+# print(token)
+# print(get_url(token))
 #
-# for account in accs:
-#     token = get_token(*account)
-#     print(token)
-#     tokens.append(token)
-#     url = get_url(token)
-#     urls.append(url)
-#     print(url)
-#
-# for token in tokens:
-#     print(token)
-#
-# for url in urls:
-#     print(url)
+# exit(0)
+
+accs = [
+]
+
+for account in accs:
+    account = account.split(':')
+    print(account)
+    token = get_token(*account)
+    if token is not None:
+        url = get_url(token)
+        print(url)
+    print()
+    time.sleep(2)
