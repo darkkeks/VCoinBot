@@ -12,13 +12,22 @@ import java.util.regex.Pattern;
 
 public class Util {
 
+    private static final String PREFIX = "window = {\n" +
+                                         "    Math: Math,\n" +
+                                         "    parseInt: parseInt,\n" +
+                                         "    location: { \n" +
+                                         "        host: \"https://vk.com\" \n" +
+                                         "    },\n" +
+                                         "    WebSocket: {kek:1}\n" +
+                                         "};";
+
     public static String evaluateJS(String js) {
         ScriptEngine engine = new ScriptEngineManager().getEngineByName("javascript");
         ScriptContext context = engine.getContext();
         StringWriter writer = new StringWriter();
         context.setWriter(writer);
 
-    	js = "var window = {};window['location'] = { host: \"https://vk.com\"};window['parseInt']=parseInt;" + js;
+    	js = PREFIX + js;
 
         try {
             Object obj = engine.eval(js);
@@ -53,9 +62,9 @@ public class Util {
                     url.getHost() +
                     "/channel/" +
                     channel +
-                    "?" +
+                    "/?" +
                     url.getQuery() +
-                    "&ver=1&pass=" + hashPassCoin(userid);
+                    "&ver=1&upd=1&pass=" + hashPassCoin(userid);
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }

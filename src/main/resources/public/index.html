@@ -1,0 +1,78 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+    <title>VCoinBank BotNet</title>
+
+    <link href="https://unpkg.com/tabulator-tables@4.2.4/dist/css/tabulator.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/tabulator-tables@4.2.4/dist/js/tabulator.min.js"></script>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"
+            integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+            crossorigin="anonymous" type="text/javascript"></script>
+
+    <style type="text/css">
+        [tabulator-field="income"], [tabulator-field="score"], [tabulator-field="place"], [tabulator-field="id"] {
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+<div id="table"></div>
+<script type="application/javascript">
+    jQuery.ajax('status')
+        .fail(() => {
+            new Tabulator("#table", {
+                columns: [{
+                    title: "Бля",
+                    field: "бля",
+                    sorter: "number"
+                }],
+                data: [{
+                    "бля": "Бля"
+                }],
+            });
+        })
+        .done(data => {
+            data = data.accounts.map(account => {
+                return {
+                    user_id: account.id,
+                    score: account.score / 1000,
+                    income: account.income / 1000,
+                    place: account.place
+                }
+            });
+            data.unshift({
+                type: 'Total',
+                score: data.reduce((value, account) => value + account.score, 0),
+                income: data.reduce((value, account) => value + account.income, 0)
+            });
+
+            var table = new Tabulator("#table", {
+                columns: [{
+                    title: "Type",
+                    field: "type"
+                }, {
+                    title: "User Id",
+                    field: "user_id",
+                    sorter: "number"
+                }, {
+                    title: "Income",
+                    field: "income",
+                    sorter: "number"
+                }, {
+                    title: "Score",
+                    field: "score",
+                    sorter: "number"
+                }, {
+                    title: "Place",
+                    field: "place",
+                    sorter: "number"
+                }],
+                data: data
+            });
+            table.getRows()[0].freeze();
+        });
+</script>
+</body>
+</html>

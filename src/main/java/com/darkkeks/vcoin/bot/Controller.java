@@ -1,10 +1,8 @@
 package com.darkkeks.vcoin.bot;
 
-import java.util.Set;
-import java.util.HashSet;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Controller {
 
@@ -14,19 +12,8 @@ public class Controller {
     private static final int TRANSFER_LEAVE = 50_000_000;
     private static final int SHARE_PACKET = 500_000_000;
 
-    private static final Set<Integer> blacklist;
-
-    static {
-        blacklist = new HashSet<>();
-        blacklist.add(349519176);
-        blacklist.add(410103684);
-        blacklist.add(244896869);
-        blacklist.add(191281578);
-    }
-
     private int sinkUser;
     private AccountStorage storage;
-    private ClientMonitor monitor;
     private ScheduledExecutorService executor;
 
     private VCoinHandler biggestAccount;
@@ -38,12 +25,7 @@ public class Controller {
     public Controller(int sinkUser) {
         this.sinkUser = sinkUser;
         this.storage = new AccountStorage();
-        this.monitor = new ClientMonitor();
         this.executor = new ScheduledThreadPoolExecutor(8);
-
-        executor.scheduleAtFixedRate(() -> {
-            monitor.print(storage);
-        }, 10, 5, TimeUnit.SECONDS);
     }
 
     public ScheduledExecutorService getExecutor() {
@@ -109,8 +91,6 @@ public class Controller {
     }
 
     private void onTransferTick(VCoinHandler client) {
-        if(blacklist.contains(client.getId())) return;
-
         long currentIncome = client.getInventory().getIncome();
         if(currentIncome >= INCOME_THRESHOLD) {
             if(client.getId() != sinkUser && sinkUser != NO_USER) {
@@ -119,5 +99,22 @@ public class Controller {
                 }
             }
         }
+    }
+
+    public long sink(Long threshold, Long leave) {
+        AtomicLong result = new AtomicLong();
+        storage.getClients().forEach((id, client) -> {
+            long currentIncome = client.getInventory().getIncome();
+            if(currentIncome >= INCOME_THRESHOLD) {
+                if(client.getId() != sinkUser && sinkUser != NO_USER) {
+                    if(client.getScore() >= threshold) {
+                        long val = client.getScore() - leave;
+                        result.addAndGet(val);
+                        client.transfer(sinkUser, val);
+                    }
+                }
+            }
+        });
+        return result.get();
     }
 }

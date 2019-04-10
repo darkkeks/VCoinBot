@@ -67,6 +67,12 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        cause.printStackTrace();
+        close();
+    }
+
     private void process(String message) {
         switch (message.charAt(0)) {
             case '{': {
@@ -82,6 +88,7 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
 
                     if(msg.has("pow")) {
                         String pow = msg.get("pow").getAsString();
+                        System.out.println(pow);
                         String result = Util.evaluateJS(pow);
                         sendPacket(Packets.captcha(randomId, result));
                     }
@@ -158,7 +165,9 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
             requests.forEach((id, future) -> {
                 future.completeExceptionally(new IOException("Connection closed"));
             });
-            updateTask.cancel(true);
+            if(updateTask != null) {
+                updateTask.cancel(true);
+            }
             controller.onStop(this);
             channel.close();
         }
