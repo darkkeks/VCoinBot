@@ -1,4 +1,4 @@
-package com.darkkeks.vcoin.bot;
+package com.darkkeks.vcoin.bot.network;
 
 import java.util.List;
 import java.util.stream.Collectors;

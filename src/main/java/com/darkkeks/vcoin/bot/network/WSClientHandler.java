@@ -1,4 +1,4 @@
-package com.darkkeks.vcoin.bot;
+package com.darkkeks.vcoin.bot.network;
 
 import io.netty.channel.*;
 import io.netty.handler.codec.MessageToMessageCodec;
@@ -70,6 +70,8 @@ class WSClientHandler extends MessageToMessageCodec<Object, String> {
         if (!handshakeFuture.isDone()) {
             handshakeFuture.setFailure(cause);
         }
-        ctx.close();
+        if(ctx.channel().isOpen()) {
+            ctx.close();
+        }
     }
 }

@@ -1,11 +1,13 @@
-package com.darkkeks.vcoin.bot;
+package com.darkkeks.vcoin.bot.sink;
+
+import com.darkkeks.vcoin.bot.network.VCoinHandler;
+import com.darkkeks.vcoin.bot.network.VCoinListener;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-public class Controller {
+public class SinkController implements VCoinListener {
 
     private static final int NO_USER = -1;
-    private static final int INCOME_THRESHOLD = 25_000;
     private static final int TRANSFER_THRESHOLD = 300_000_000;
     private static final int TRANSFER_LEAVE = 50_000_000;
 
@@ -14,11 +16,7 @@ public class Controller {
 
     private VCoinHandler biggestAccount;
 
-    public Controller() {
-        this(NO_USER);
-    }
-
-    public Controller(int sinkUser) {
+    public SinkController(int sinkUser) {
         this.sinkUser = sinkUser;
         this.storage = new AccountStorage();
     }
@@ -35,11 +33,13 @@ public class Controller {
         return biggestAccount;
     }
 
+    @Override
     public void onStart(VCoinHandler client) {
         storage.update(client);
         updateBiggest(client);
     }
 
+    @Override
     public void onStop(VCoinHandler client) {
         storage.remove(client);
         if(biggestAccount == client) {
@@ -53,6 +53,7 @@ public class Controller {
         }
     }
 
+    @Override
     public void onStatusUpdate(VCoinHandler client) {
         storage.update(client);
         updateBiggest(client);
@@ -60,19 +61,16 @@ public class Controller {
     }
 
     private void onTransferTick(VCoinHandler client, long threshold, long leave) {
-        long currentIncome = client.getInventory().getIncome();
-        if(currentIncome >= INCOME_THRESHOLD) {
-            if(client.getId() != sinkUser && sinkUser != NO_USER) {
-                if(client.getScore() >= threshold) {
-                    client.transfer(sinkUser, client.getScore() - leave);
-                }
+        if(client.getId() != sinkUser && sinkUser != NO_USER) {
+            if(client.getScore() >= threshold) {
+                client.transfer(sinkUser, client.getScore() - leave);
             }
         }
     }
 
     public long sink(Long threshold, Long leave) {
         AtomicLong result = new AtomicLong();
-        storage.getClients().forEach((id, client) -> {
+        storage.getClients().values().forEach(client -> {
             onTransferTick(client, threshold, leave);
         });
         return result.get();

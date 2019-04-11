@@ -1,4 +1,6 @@
-package com.darkkeks.vcoin.bot;
+package com.darkkeks.vcoin.bot.sink;
+
+import com.darkkeks.vcoin.bot.network.VCoinHandler;
 
 import java.util.Map;
 import java.util.TreeMap;
@@ -17,10 +19,6 @@ public class AccountStorage {
 
     public synchronized void remove(VCoinHandler client) {
         clients.remove(client.getId());
-    }
-
-    public int size() {
-        return clients.size();
     }
 
     public synchronized Map<Integer, VCoinHandler> getClients() {

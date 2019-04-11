@@ -38,7 +38,6 @@
                 return {
                     user_id: account.id,
                     score: account.score / 1000,
-                    income: account.income / 1000,
                     place: account.place
                 }
             });
@@ -55,10 +54,6 @@
                 }, {
                     title: "User Id",
                     field: "user_id",
-                    sorter: "number"
-                }, {
-                    title: "Income",
-                    field: "income",
                     sorter: "number"
                 }, {
                     title: "Score",

@@ -1,5 +1,6 @@
-package com.darkkeks.vcoin.bot;
+package com.darkkeks.vcoin.bot.sink;
 
+import com.darkkeks.vcoin.bot.network.VCoinHandler;
 import com.google.gson.Gson;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
@@ -20,17 +21,20 @@ public class WebServer {
     private String token;
     private Undertow server;
 
-    private Controller controller;
+    private SinkController sinkController;
 
-    public WebServer(String token, Controller controller) {
+    public WebServer(String token, SinkController sinkController) {
         this.token = token;
         this.gson = new Gson();
-        this.controller = controller;
+        this.sinkController = sinkController;
     }
 
     public void start() {
         ClassPathResourceManager resourceManager = new ClassPathResourceManager(
                 getClass().getClassLoader(), "public/");
+
+        HttpHandler loginHandler = new SetCookieHandler("token", token, 228, Handlers.redirect("/"));
+        HttpHandler logoutHandler = new SetCookieHandler("token", "", -1, Handlers.redirect("/"));
 
         server = Undertow.builder()
                 .addHttpListener(PORT, "0.0.0.0")
@@ -44,13 +48,13 @@ public class WebServer {
                                 .addExactPath("/status", this::handleStatus)
                                 .addExactPath("/transfer", this::handleTransfer)
                                 .addExactPath("/sink", this::handleSink)
+                                .addExactPath("/logout", logoutHandler)
                                 .addPrefixPath("/", Handlers.resource(resourceManager)),
                         Handlers.path()
                                 .addPrefixPath(String.format("/%s", token), Handlers.path()
                                         .addExactPath("/status", this::handleStatus)
                                         .addExactPath("/transfer", this::handleTransfer)
-                                        .addExactPath("/auth", new SetCookieHandler(
-                                                "token", token, Handlers.redirect("/"))))
+                                        .addExactPath("/auth", loginHandler))
                 ))
                 .build();
         server.start();
@@ -59,7 +63,7 @@ public class WebServer {
     private void handleStatus(HttpServerExchange exchange) {
         exchange.getResponseHeaders()
                 .add(Headers.CONTENT_TYPE, "application/json");
-        exchange.getResponseSender().send(gson.toJson(new BotStatus(controller.getStorage())));
+        exchange.getResponseSender().send(gson.toJson(new BotStatus(sinkController.getStorage())));
     }
 
     private void handleSink(HttpServerExchange exchange) {
@@ -70,7 +74,7 @@ public class WebServer {
         Optional<Long> leave = queryParam(exchange, "leave").map(Long::parseLong);
 
         if(threshold.isPresent() && leave.isPresent()) {
-            long result = controller.sink(threshold.get(), leave.get());
+            long result = sinkController.sink(threshold.get(), leave.get());
             exchange.getResponseSender().send("Success " + (result / 1000.0));
         } else {
             exchange.getResponseSender().send("Missing params");
@@ -86,9 +90,9 @@ public class WebServer {
 
         TransferStatus result;
         if (to.isPresent() && amount.isPresent()) {
-            if (controller.hasBiggest()) {
-                VCoinHandler client = controller.getBiggestAccount();
-                Optional<String> response = client.transferBlocking(to.get(), amount.get());
+            if (sinkController.hasBiggest()) {
+                VCoinHandler client = sinkController.getBiggestAccount();
+                Optional<String> response = client.transfer(to.get(), amount.get()).join();
                 result = response.map(TransferStatus::new).orElseGet(TransferStatus::new);
             } else {
                 result = new TransferStatus("Missing sink account");
@@ -110,6 +114,7 @@ public class WebServer {
 
         private boolean success;
         private String message;
+
         public TransferStatus() {
             this.success = true;
             this.message = null;
@@ -119,24 +124,20 @@ public class WebServer {
             this.success = false;
             this.message = message;
         }
-
     }
 
     @SuppressWarnings({"unused", "FieldCanBeLocal", "MismatchedQueryAndUpdateOfCollection"})
     private static class BotStatus {
 
         private long score;
-        private long income;
         private List<AccountData> accounts;
 
         public BotStatus(AccountStorage storage) {
             accounts = new ArrayList<>();
             storage.getClients().forEach((id, client) -> {
                 score += client.getScore();
-                income += client.getInventory().getIncome();
                 accounts.add(new AccountData(
                         client.getId(),
-                        client.getInventory().getIncome(),
                         client.getScore(),
                         client.getPlace()));
             });
@@ -147,15 +148,13 @@ public class WebServer {
 
             private int id;
             private int place;
-            private long income;
             private long score;
-            public AccountData(int id, long income, long score, int place) {
+
+            public AccountData(int id, long score, int place) {
                 this.id = id;
-                this.income = income;
                 this.score = score;
                 this.place = place;
             }
-
         }
     }
 
@@ -163,19 +162,27 @@ public class WebServer {
 
         private String name;
         private String value;
+        private int expiry;
         private HttpHandler next;
 
-        public SetCookieHandler(String name, String value, HttpHandler next) {
+        public SetCookieHandler(String name,
+                                String value,
+                                int expiry,
+                                HttpHandler next) {
             this.name = name;
             this.value = value;
+            this.expiry = expiry;
             this.next = next;
         }
 
         @Override
         public void handleRequest(HttpServerExchange exchange) throws Exception {
+            Calendar calendar = Calendar.getInstance();
+            calendar.add(Calendar.DATE, expiry);
             exchange.setResponseCookie(new CookieImpl(name)
                     .setValue(value)
-                    .setPath("/"));
+                    .setPath("/")
+                    .setExpires(calendar.getTime()));
             next.handleRequest(exchange);
         }
     }
