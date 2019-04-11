@@ -7,14 +7,11 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.concurrent.ScheduledFuture;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 public class VCoinHandler extends ChannelInboundHandlerAdapter {
@@ -88,7 +85,6 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
 
                     if(msg.has("pow")) {
                         String pow = msg.get("pow").getAsString();
-                        System.out.println(pow);
                         String result = Util.evaluateJS(pow);
                         sendPacket(Packets.captcha(randomId, result));
                     }
@@ -147,6 +143,7 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
                     message = message.replaceFirst(TR + " ", "");
                     String[] parts = message.split(" ");
                     long delta = Long.valueOf(parts[0]);
+                    int from = Integer.valueOf(parts[1]);
                     score += delta;
                     controller.onStatusUpdate(this);
                 } else if(message.startsWith(MSG)) {
@@ -162,12 +159,12 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
 
     private void close() {
         if(channel.isOpen()) {
-            requests.forEach((id, future) -> {
-                future.completeExceptionally(new IOException("Connection closed"));
-            });
             if(updateTask != null) {
                 updateTask.cancel(true);
             }
+            requests.forEach((id, future) -> {
+                future.completeExceptionally(new IOException("Connection closed"));
+            });
             controller.onStop(this);
             channel.close();
         }
@@ -176,17 +173,16 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
     private void startClient() {
         controller.onStart(this);
 
-        updateTask = controller.getExecutor().scheduleAtFixedRate(() -> {
-            int cnt = Math.min(random.nextInt(30) + 1, ccp);
-            sendPacket(Packets.click(cnt, randomId));
-        }, 2000, 1200, TimeUnit.MILLISECONDS);
+        updateTask = channel.eventLoop().scheduleAtFixedRate(() -> {
+            updateScore();
+            controller.onStatusUpdate(this);
+        }, 2, 5, TimeUnit.SECONDS);
     }
 
-    public void buyItem(Item item) {
-        sendRequest(Packets.buy(item)).thenAccept(response -> {
+    private void updateScore() {
+        sendRequest(Packets.getScores(Collections.singletonList(getId()))).thenAccept(response -> {
             JsonObject obj = parser.parse(response).getAsJsonObject();
-            score = obj.get("score").getAsLong();
-            inventory = new Inventory(obj.get("items"));
+            score = obj.get(String.valueOf(getId())).getAsLong();
         });
     }
 
@@ -223,7 +219,6 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
         requests.put(requestId, result);
         return result;
     }
-
 
     public int getId() {
         return userId;

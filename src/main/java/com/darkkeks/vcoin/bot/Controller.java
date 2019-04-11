@@ -1,7 +1,5 @@
 package com.darkkeks.vcoin.bot;
 
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class Controller {
@@ -10,11 +8,9 @@ public class Controller {
     private static final int INCOME_THRESHOLD = 25_000;
     private static final int TRANSFER_THRESHOLD = 300_000_000;
     private static final int TRANSFER_LEAVE = 50_000_000;
-    private static final int SHARE_PACKET = 500_000_000;
 
     private int sinkUser;
     private AccountStorage storage;
-    private ScheduledExecutorService executor;
 
     private VCoinHandler biggestAccount;
 
@@ -25,11 +21,6 @@ public class Controller {
     public Controller(int sinkUser) {
         this.sinkUser = sinkUser;
         this.storage = new AccountStorage();
-        this.executor = new ScheduledThreadPoolExecutor(8);
-    }
-
-    public ScheduledExecutorService getExecutor() {
-        return executor;
     }
 
     public AccountStorage getStorage() {
@@ -46,6 +37,7 @@ public class Controller {
 
     public void onStart(VCoinHandler client) {
         storage.update(client);
+        updateBiggest(client);
     }
 
     public void onStop(VCoinHandler client) {
@@ -55,47 +47,24 @@ public class Controller {
         }
     }
 
-    public void onStatusUpdate(VCoinHandler client) {
-        storage.update(client);
-        share(client);
-        long currentIncome = client.getInventory().getIncome();
-        if(currentIncome < INCOME_THRESHOLD) {
-            buy(client);
-        }
-        onTransferTick(client);
-    }
-
-    private void buy(VCoinHandler client) {
-        ItemStack item = client.getInventory().getBestItem();
-        if(item != null) {
-            if(client.getScore() >= item.getNextPrice()) {
-                client.buyItem(item.getItem());
-            }
-        }
-    }
-
-    private void share(VCoinHandler client) {
+    private void updateBiggest(VCoinHandler client) {
         if(client.getId() == sinkUser) {
             biggestAccount = client;
         }
-
-        if(hasBiggest() && client.getId() != sinkUser) {
-            if(client.getInventory().getIncome() < INCOME_THRESHOLD) {
-                if(client.getScore() < SHARE_PACKET) {
-                    if(biggestAccount.getScore() >= SHARE_PACKET) {
-                        biggestAccount.transfer(client.getId(), SHARE_PACKET);
-                    }
-                }
-            }
-        }
     }
 
-    private void onTransferTick(VCoinHandler client) {
+    public void onStatusUpdate(VCoinHandler client) {
+        storage.update(client);
+        updateBiggest(client);
+        onTransferTick(client, TRANSFER_THRESHOLD, TRANSFER_LEAVE);
+    }
+
+    private void onTransferTick(VCoinHandler client, long threshold, long leave) {
         long currentIncome = client.getInventory().getIncome();
         if(currentIncome >= INCOME_THRESHOLD) {
             if(client.getId() != sinkUser && sinkUser != NO_USER) {
-                if(client.getScore() >= TRANSFER_THRESHOLD) {
-                    client.transfer(sinkUser, client.getScore() - TRANSFER_LEAVE);
+                if(client.getScore() >= threshold) {
+                    client.transfer(sinkUser, client.getScore() - leave);
                 }
             }
         }
@@ -104,16 +73,7 @@ public class Controller {
     public long sink(Long threshold, Long leave) {
         AtomicLong result = new AtomicLong();
         storage.getClients().forEach((id, client) -> {
-            long currentIncome = client.getInventory().getIncome();
-            if(currentIncome >= INCOME_THRESHOLD) {
-                if(client.getId() != sinkUser && sinkUser != NO_USER) {
-                    if(client.getScore() >= threshold) {
-                        long val = client.getScore() - leave;
-                        result.addAndGet(val);
-                        client.transfer(sinkUser, val);
-                    }
-                }
-            }
+            onTransferTick(client, threshold, leave);
         });
         return result.get();
     }

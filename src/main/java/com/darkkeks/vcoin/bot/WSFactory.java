@@ -46,8 +46,6 @@ public class WSFactory {
     public void connect(URI uri) {
         Bootstrap bootstrap = new Bootstrap();
 
-        System.out.println(uri);
-
         String host = uri.getHost();
         int port = WSS_PORT;
 
