@@ -10,7 +10,7 @@ public class Database {
 
     private static final Logger logger = LoggerFactory.getLogger(Database.class);
 
-    private static final String NEW_TRANSACTION = "INSERT INTO transaction_log (\"from\", \"to\", amount) VALUES (?, ?, ?);";
+    private static final String NEW_TRANSACTION = "INSERT INTO transactions (\"from\", \"to\", amount) VALUES (?, ?, ?);";
     private static final String UPDATE_SCORE = "INSERT INTO user_scores (user_id, score) VALUES (?, ?) " +
             "ON CONFLICT (user_id) DO UPDATE SET score = user_scores.score + excluded.score";
 

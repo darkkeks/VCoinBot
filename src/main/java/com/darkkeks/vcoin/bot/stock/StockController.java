@@ -29,6 +29,11 @@ public class StockController implements VCoinListener {
     }
 
     @Override
+    public void onStop(VCoinHandler client) {
+
+    }
+
+    @Override
     public void onStatusUpdate(VCoinHandler client) {
         if(client.getId() == stockId && client.getScore() > locked) {
             client.transfer(sinkId, client.getScore() - locked);

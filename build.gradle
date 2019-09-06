@@ -21,6 +21,11 @@ dependencies {
     compile 'ch.qos.logback:logback-classic:1.3.0-alpha4'
 }
 
+task getDeps(type: Copy) {
+    from sourceSets.main.runtimeClasspath
+    into 'runtime/'
+}
+
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 task sinkJar(type: ShadowJar) {

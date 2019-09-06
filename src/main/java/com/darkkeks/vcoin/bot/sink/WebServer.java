@@ -74,8 +74,8 @@ public class WebServer {
         Optional<Long> leave = queryParam(exchange, "leave").map(Long::parseLong);
 
         if(threshold.isPresent() && leave.isPresent()) {
-            long result = sinkController.sink(threshold.get(), leave.get());
-            exchange.getResponseSender().send("Success " + (result / 1000.0));
+            sinkController.sink(threshold.get(), leave.get());
+            exchange.getResponseSender().send("Success");
         } else {
             exchange.getResponseSender().send("Missing params");
         }

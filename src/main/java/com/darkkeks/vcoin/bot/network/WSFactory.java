@@ -31,9 +31,9 @@ public class WSFactory {
 
     private static final Logger logger = LoggerFactory.getLogger(WSFactory.class);
 
-    private static final int THREADS = 32;
+    private static final int THREADS = 2;
     private static final int WSS_PORT = 443;
-    private static final int DEFAULT_RECONNECT_DELAY = 300;
+    private static final int DEFAULT_RECONNECT_DELAY = 15;
 
     private EventLoopGroup group;
     private SslContext sslContext;

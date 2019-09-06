@@ -13,7 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -30,6 +32,7 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
     private static final String TR = "TR";
     private static final String INIT = "INIT";
     private static final String MSG = "MSG";
+    private static final String TOO_MANY_TRANSFERS = "TOO_MANY_TRANSFERS";
 
     private int requestId;
     private Map<Integer, CompletableFuture<String>> requests;
@@ -55,7 +58,7 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+    public void channelInactive(ChannelHandlerContext ctx) {
         close();
     }
 
@@ -75,7 +78,7 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void process(String message) {
-        logger.debug(message);
+        logger.debug("[{} <- ] {}", getId(), message);
         switch (message.charAt(0)) {
             case '{': {
                 JsonObject msg = parser.parse(message).getAsJsonObject();
@@ -99,18 +102,21 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
             case 'R': {
                 message = message.substring(1);
                 String[] parts = message.split(" ");
-                int id = Integer.valueOf(parts[0]);
+                int id = Integer.parseInt(parts[0]);
+                message = message.substring(message.indexOf(' ') + 1);
                 requests.get(id).completeExceptionally(new IllegalStateException(message));
                 requests.remove(id);
                 break;
             }
             case 'C': {
                 message = message.substring(1);
+
                 String[] parts = message.split(" ");
-                int id = Integer.valueOf(parts[0]);
+                int id = Integer.parseInt(parts[0]);
                 CompletableFuture<String> request = requests.get(id);
+                message = message.substring(message.indexOf(' ') + 1);
                 if(request != null) {
-                    request.complete(message.substring(message.indexOf(' ') + 1));
+                    request.complete(message);
                 }
                 requests.remove(id);
                 break;
@@ -124,9 +130,9 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
                     message = message.replaceFirst(SELF_DATA + " ", "");
                     String[] parts = message.split(" ");
 
-                    place = Integer.valueOf(parts[0]);
-                    score = Long.valueOf(parts[1]);
-                    randomId = Integer.valueOf(parts[2]);
+                    place = Integer.parseInt(parts[0]);
+                    score = Long.parseLong(parts[1]);
+                    randomId = Integer.parseInt(parts[2]);
 
                     listener.onStatusUpdate(this);
                 } else if(message.startsWith(BROKEN)) {
@@ -134,12 +140,12 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
                     close();
                 } else if(message.startsWith(MISS)) {
                     message = message.replaceFirst(MISS + " ", "");
-                    randomId = Integer.valueOf(message);
+                    randomId = Integer.parseInt(message);
                 } else if(message.startsWith(TR)) {
                     message = message.replaceFirst(TR + " ", "");
                     String[] parts = message.split(" ");
-                    long delta = Long.valueOf(parts[0]);
-                    int from = Integer.valueOf(parts[1]);
+                    long delta = Long.parseLong(parts[0]);
+                    int from = Integer.parseInt(parts[1]);
                     score += delta;
                     listener.onTransfer(this, delta, from);
                     listener.onStatusUpdate(this);
@@ -171,27 +177,29 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
         listener.onStart(this);
 
         updateTask = channel.eventLoop().scheduleAtFixedRate(() -> {
-            updateScore();
             listener.onStatusUpdate(this);
         }, 2, 5, TimeUnit.SECONDS);
     }
 
-    private void updateScore() {
-        sendRequest(Packets.getScores(Collections.singletonList(getId()))).thenAccept(response -> {
-            JsonObject obj = parser.parse(response).getAsJsonObject();
-            score = obj.get(String.valueOf(getId())).getAsLong();
-        });
-    }
-
     public CompletableFuture<Optional<String>> transfer(int user, long amount) {
         score -= amount;
-        return sendRequest(Packets.transfer(user, amount)).thenApply(response -> {
-            try {
-                JsonObject obj = parser.parse(response).getAsJsonObject();
-                score = obj.get("score").getAsLong();
-                return Optional.empty();
-            } catch (JsonParseException ex) {
-                return Optional.of(response);
+        return sendRequest(Packets.transfer(user, amount)).exceptionally(error -> {
+            score += amount;
+            return error.getMessage();
+        }).thenCompose(response -> {
+            if(response.equals(TOO_MANY_TRANSFERS)) {
+                return transfer(user, amount);
+            } else {
+                Optional<String> result;
+                try {
+                    JsonObject obj = parser.parse(response).getAsJsonObject();
+                    score = obj.get("score").getAsLong();
+                    place = obj.get("place").getAsInt();
+                    result = Optional.empty();
+                } catch (JsonParseException ex) {
+                    result = Optional.of(response);
+                }
+                return CompletableFuture.completedFuture(result);
             }
         });
     }
@@ -199,7 +207,7 @@ public class VCoinHandler extends ChannelInboundHandlerAdapter {
     private void sendPacket(Packet packet) {
         ++requestId;
         String msg = packet.serialize(requestId);
-        logger.debug(msg);
+        logger.debug("[{} -> ] {}", getId(), msg);
         if(channel.isOpen()) {
             channel.writeAndFlush(msg)
                     .addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);

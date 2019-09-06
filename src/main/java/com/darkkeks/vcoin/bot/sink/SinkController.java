@@ -3,13 +3,9 @@ package com.darkkeks.vcoin.bot.sink;
 import com.darkkeks.vcoin.bot.network.VCoinHandler;
 import com.darkkeks.vcoin.bot.network.VCoinListener;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 public class SinkController implements VCoinListener {
 
     private static final int NO_USER = -1;
-    private static final int TRANSFER_THRESHOLD = 300_000_000;
-    private static final int TRANSFER_LEAVE = 50_000_000;
 
     private int sinkUser;
     private AccountStorage storage;
@@ -57,22 +53,20 @@ public class SinkController implements VCoinListener {
     public void onStatusUpdate(VCoinHandler client) {
         storage.update(client);
         updateBiggest(client);
-        onTransferTick(client, TRANSFER_THRESHOLD, TRANSFER_LEAVE);
     }
 
-    private void onTransferTick(VCoinHandler client, long threshold, long leave) {
-        if(client.getId() != sinkUser && sinkUser != NO_USER) {
-            if(client.getScore() >= threshold) {
-                client.transfer(sinkUser, client.getScore() - leave);
-            }
-        }
+    @Override
+    public void onTransfer(VCoinHandler client, long delta, int from) {
+
     }
 
-    public long sink(Long threshold, Long leave) {
-        AtomicLong result = new AtomicLong();
+    public void sink(Long threshold, Long leave) {
         storage.getClients().values().forEach(client -> {
-            onTransferTick(client, threshold, leave);
+            if(client.getId() != sinkUser && sinkUser != NO_USER) {
+                if(client.getScore() >= threshold) {
+                    client.transfer(sinkUser, client.getScore() - leave);
+                }
+            }
         });
-        return result.get();
     }
 }
